@@ -70,11 +70,19 @@ end
 
 local Players: { Player } = {}
 do
-	local playersIndex: { [Player]: number } = {}
+	-- local playersIndex: { [Player]: number } = {}
 	local function InsertPlayer(player: Player)
 		table.insert(Players, player)
-		playersIndex[player] = #Players
+		-- playersIndex[player] = #Players
 	end
+
+	PlayersService.PlayerRemoving:Connect(function(player: Player)
+		local i = table.find(Players, player)
+		if not i then
+			return
+		end
+		table.remove(Players, i)
+	end)
 
 	PlayersService.PlayerAdded:Connect(InsertPlayer)
 	for _, v: Player in PlayersService:GetPlayers() do
