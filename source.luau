@@ -3,6 +3,7 @@
 _G.globals = {
 	fov = 90,
 	targetPart = "Head", -- Head, Torso, Left Arm, Right Arm, Left Leg, Right Leg
+	ignoreEverything = false,
 	visibleCheck = false,
 	teamCheck = false,
 }
@@ -10,6 +11,7 @@ _G.globals = {
 type _globals = {
 	fov: number,
 	targetPart: string,
+	ignoreEverything: boolean,
 	visibleCheck: boolean,
 	teamCheck: boolean,
 }
@@ -81,6 +83,7 @@ do
 		if not i then
 			return
 		end
+
 		table.remove(Players, i)
 	end)
 
@@ -91,6 +94,33 @@ do
 		end
 
 		task.spawn(InsertPlayer, v)
+	end
+end
+
+local env = getgenv() :: { ignoreInstances: {} }
+local ignoreInstances = env.ignoreInstances
+	or setmetatable({} :: any, {
+		__call = function(self, ...)
+			for _, v: Instance in { ... } do
+				table.insert(self, v)
+			end
+		end,
+	});
+(getgenv() :: { ignoreInstances: {} }).ignoreInstances = ignoreInstances :: {}
+
+do
+	if globals.ignoreEverything then
+		local function InsertInstance(v: Instance)
+			if v.Parent and v.Parent:IsA("Model") and PlayersService:GetPlayerFromCharacter(v.Parent) then
+				return
+			end
+
+			(ignoreInstances :: (Instance) -> nil)(v)
+		end
+		for i, v: Instance in workspace:GetDescendants() do
+			InsertInstance(v)
+		end
+		workspace.DescendantAdded:Connect(InsertInstance)
 	end
 end
 
@@ -117,6 +147,10 @@ local function GetAimingPlayer(): BasePart?
 	local bestDist: number, bestTargetPart: BasePart
 	local playerInstance = Player.instance
 	for i, player in Players do
+		if player == (playerInstance :: Player) then
+			continue
+		end
+
 		if globals.teamCheck and player.Team == playerInstance.Team then
 			continue
 		end
@@ -159,13 +193,17 @@ local function hkFireInstantHit(self: Workspace?, ray: Ray, ignoreList: { Instan
 		return old(self, ray, ignoreList, raycastParams)
 	end
 
+	local method = getnamecallmethod()
+	if method ~= "FindPartOnRayWithIgnoreList" then
+		return old(self, ray, ignoreList, raycastParams)
+	end
+
 	local targetPart = GetAimingPlayer()
 	if targetPart then
 		local origin = ray.Origin
 		local direction = (targetPart.Position - origin).Unit * 1000
 		local newRay = Ray.new(origin, direction)
-
-		return old(self, newRay, ignoreList, raycastParams)
+		return old(self, newRay, globals.ignoreEverything and ignoreInstances or ignoreList, raycastParams)
 	end
 	return old(self, ray, ignoreList, raycastParams)
 end
